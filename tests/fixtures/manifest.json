@@ -1,0 +1,39 @@
+{
+  "nodes": {
+    "model.pkg.my_model": {
+      "resource_type": "model",
+      "name": "my_model",
+      "package_name": "pkg"
+    },
+    "model.pkg.child_a": {
+      "resource_type": "model",
+      "name": "child_a",
+      "package_name": "pkg"
+    },
+    "model.pkg.child_b": {
+      "resource_type": "model",
+      "name": "child_b",
+      "package_name": "pkg"
+    },
+    "model.pkg.grandchild": {
+      "resource_type": "model",
+      "name": "grandchild",
+      "package_name": "pkg"
+    },
+    "test.pkg.some_test": {
+      "resource_type": "test",
+      "name": "some_test",
+      "package_name": "pkg"
+    }
+  },
+  "parent_map": {
+    "model.pkg.child_a": ["model.pkg.my_model"],
+    "model.pkg.child_b": ["model.pkg.my_model"],
+    "model.pkg.grandchild": ["model.pkg.child_a"],
+    "test.pkg.some_test": ["model.pkg.my_model"]
+  },
+  "child_map": {
+    "model.pkg.my_model": ["model.pkg.child_a", "model.pkg.child_b", "test.pkg.some_test"],
+    "model.pkg.child_a": ["model.pkg.grandchild"]
+  }
+}

@@ -13,6 +13,23 @@ It is designed for fast local inspection, with short commands and selector synta
 
 ## Installation
 
+### Install from GitHub release binary
+
+Download the latest Linux release archive and extract `dbtl`:
+
+```bash
+curl -fL -o dbtl.tar.gz \
+  https://github.com/maxfirman/dbtl/releases/latest/download/dbtl-v0.1.1-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf dbtl.tar.gz
+chmod +x dbtl
+```
+
+Optional: move it onto your `PATH`:
+
+```bash
+sudo mv dbtl /usr/local/bin/dbtl
+```
+
 ### Build from source
 
 ```bash

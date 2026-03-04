@@ -1,2 +1,6 @@
 /target
 .idea/
+
+# Local/generated fixture artifacts
+tests/fixtures/jaffle_shop_project/.user.yml
+tests/fixtures/logs/

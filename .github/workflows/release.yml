@@ -9,9 +9,25 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build and Publish Release
-    runs-on: ubuntu-latest
+  build-assets:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin_name: dbtl
+          - os: macos-13
+            target: x86_64-apple-darwin
+            bin_name: dbtl
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin_name: dbtl
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin_name: dbtl.exe
 
     steps:
       - name: Checkout
@@ -19,22 +35,52 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package binary
         run: |
           mkdir -p dist
-          cp target/release/dbtl dist/dbtl
-          chmod +x dist/dbtl
-          tar -C dist -czf dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz dbtl
-          sha256sum dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz > dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz.sha256
+          cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} dist/${{ matrix.bin_name }}
+          if [ "${{ matrix.bin_name }}" = "dbtl" ]; then
+            chmod +x dist/dbtl
+          fi
 
+          archive="dbtl-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
+          tar -C dist -czf "$archive" ${{ matrix.bin_name }}
+          python - <<'PY' "$archive"
+import hashlib
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+digest = hashlib.sha256(path.read_bytes()).hexdigest()
+path.with_suffix(path.suffix + ".sha256").write_text(f"{digest}  {path.name}\n")
+PY
+
+      - name: Upload packaged asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-release-asset
+          path: |
+            dbtl-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+            dbtl-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-assets
+    steps:
+      - name: Download packaged assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
-            dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz.sha256
+          files: release-assets/*
           generate_release_notes: true

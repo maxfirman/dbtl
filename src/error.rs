@@ -25,11 +25,17 @@ pub enum AppError {
         model_name: String,
         candidates: String,
     },
+    #[error("self update failed: {0}")]
+    SelfUpdate(String),
 }
 
 impl AppError {
     pub fn usage(msg: impl Into<String>) -> Self {
         Self::Usage(msg.into())
+    }
+
+    pub fn self_update(msg: impl Into<String>) -> Self {
+        Self::SelfUpdate(msg.into())
     }
 
     pub fn exit_code(&self) -> i32 {

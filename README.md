@@ -30,6 +30,12 @@ Optional: move it onto your `PATH`:
 sudo mv dbtl /usr/local/bin/dbtl
 ```
 
+After installation, you can update to the newest GitHub release in place:
+
+```bash
+dbtl self update
+```
+
 ### Build from source
 
 ```bash
@@ -52,6 +58,7 @@ cargo run -- --target-path /path/to/target -s +orders+
 
 ```bash
 dbtl [--target-path <DIR>] [-s|--select <SELECTOR>...]
+dbtl self update
 ```
 
 ### Arguments

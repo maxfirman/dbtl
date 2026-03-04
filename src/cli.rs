@@ -1,18 +1,35 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(name = "dbtl")]
 #[command(about = "Print model lineage slices from a dbt manifest")]
 pub struct Cli {
+    #[command(subcommand)]
+    pub command: Option<Command>,
     #[arg(short = 's', long, num_args = 1..)]
     pub select: Option<Vec<String>>,
     #[arg(long, default_value = "target")]
     pub target_path: String,
 }
 
+#[derive(Debug, Subcommand, PartialEq, Eq)]
+pub enum Command {
+    #[command(name = "self", about = "Manage dbtl itself")]
+    SelfCmd {
+        #[command(subcommand)]
+        command: SelfCommand,
+    },
+}
+
+#[derive(Debug, Subcommand, PartialEq, Eq)]
+pub enum SelfCommand {
+    #[command(about = "Update dbtl to the latest GitHub release")]
+    Update,
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Cli;
+    use super::{Cli, Command, SelfCommand};
     use clap::Parser;
 
     #[test]
@@ -26,5 +43,16 @@ mod tests {
         let cli =
             Cli::try_parse_from(["dbtl", "-s", "a", "b,c"]).expect("cli should parse selectors");
         assert_eq!(cli.select.unwrap_or_default(), vec!["a", "b,c"]);
+    }
+
+    #[test]
+    fn parses_self_update_subcommand() {
+        let cli = Cli::try_parse_from(["dbtl", "self", "update"]).expect("cli should parse");
+        assert_eq!(
+            cli.command,
+            Some(Command::SelfCmd {
+                command: SelfCommand::Update
+            })
+        );
     }
 }

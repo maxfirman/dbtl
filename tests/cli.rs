@@ -79,7 +79,17 @@ fn help_flag_exits_successfully() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Usage: dbtl [OPTIONS]"));
+        .stdout(predicate::str::contains("Usage: dbtl"))
+        .stdout(predicate::str::contains("self"));
+}
+
+#[test]
+fn self_update_help_exits_successfully() {
+    binary_cmd()
+        .args(["self", "update", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Usage: dbtl self update"));
 }
 
 #[test]

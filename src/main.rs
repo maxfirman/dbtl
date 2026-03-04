@@ -7,10 +7,11 @@ mod selector;
 
 use clap::Parser;
 use clap::error::ErrorKind;
-use cli::Cli;
+use cli::{Cli, Command, SelfCommand};
 use error::AppError;
 use graph::GraphIndex;
 use manifest::Manifest;
+use self_update::cargo_crate_version;
 use std::path::PathBuf;
 
 fn main() {
@@ -31,6 +32,15 @@ fn run() -> Result<(), AppError> {
             _ => return Err(AppError::usage(err.to_string())),
         },
     };
+
+    if let Some(command) = cli.command {
+        match command {
+            Command::SelfCmd {
+                command: SelfCommand::Update,
+            } => return run_self_update(),
+        }
+    }
+
     let manifest_path = resolve_manifest_path(&cli.target_path);
     let manifest = Manifest::from_path(&manifest_path)?;
     let graph = GraphIndex::from_manifest(&manifest);
@@ -48,4 +58,20 @@ fn run() -> Result<(), AppError> {
 
 fn resolve_manifest_path(target_path: &str) -> PathBuf {
     PathBuf::from(target_path).join("manifest.json")
+}
+
+fn run_self_update() -> Result<(), AppError> {
+    let status = self_update::backends::github::Update::configure()
+        .repo_owner("maxfirman")
+        .repo_name("dbtl")
+        .bin_name("dbtl")
+        .show_download_progress(true)
+        .current_version(cargo_crate_version!())
+        .build()
+        .map_err(|err| AppError::self_update(err.to_string()))?
+        .update()
+        .map_err(|err| AppError::self_update(err.to_string()))?;
+
+    println!("Updated dbtl to {}", status.version());
+    Ok(())
 }

@@ -6,7 +6,7 @@ It is designed for fast local inspection, with short commands and selector synta
 
 ## What It Does
 
-- Reads dbt metadata from `<state>/manifest.json` (default state directory: `target`)
+- Reads dbt metadata from `<target-path>/manifest.json` (default target path: `target`)
 - Builds a model-only DAG (`resource_type == "model"`)
 - Renders lineage as left-to-right ASCII graphs
 - Supports selector unions and depth-limited traversal
@@ -28,18 +28,18 @@ Binary path:
 ### Run without installing
 
 ```bash
-cargo run -- --state /path/to/target -s +orders+
+cargo run -- --target-path /path/to/target -s +orders+
 ```
 
 ## Usage
 
 ```bash
-dbtl [--state <DIR>] [-s|--select <SELECTOR>...]
+dbtl [--target-path <DIR>] [-s|--select <SELECTOR>...]
 ```
 
 ### Arguments
 
-- `--state <DIR>`: directory containing `manifest.json` (default: `target`)
+- `--target-path <DIR>`: directory containing `manifest.json` (default: `target`)
 - `-s, --select <SELECTOR>...`: one or more selectors (space-separated) to union
 
 If `--select` is omitted, `dbtl` renders all model nodes in the manifest.

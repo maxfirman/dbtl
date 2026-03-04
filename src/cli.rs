@@ -13,7 +13,7 @@ pub struct Cli {
     #[arg(short = 's', long, num_args = 1..)]
     pub select: Option<Vec<String>>,
     #[arg(long, default_value = "target")]
-    pub state: String,
+    pub target_path: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

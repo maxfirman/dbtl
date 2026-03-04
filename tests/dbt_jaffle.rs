@@ -38,7 +38,7 @@ fn parses_fresh_jaffle_project_and_queries_lineage() {
 
     Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
         .args([
-            "--state",
+            "--target-path",
             target_dir.to_str().expect("path should be valid utf-8"),
             "--select",
             "orders+",
@@ -50,7 +50,7 @@ fn parses_fresh_jaffle_project_and_queries_lineage() {
 
     Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
         .args([
-            "--state",
+            "--target-path",
             target_dir.to_str().expect("path should be valid utf-8"),
         ])
         .assert()

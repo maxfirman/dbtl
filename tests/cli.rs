@@ -164,11 +164,11 @@ fn prints_both_sections_for_surrounded_plus() {
 }
 
 #[test]
-fn state_flag_overrides_default_target() {
+fn target_path_flag_overrides_default_target() {
     let temp = setup_state_dir("custom_state");
     binary_cmd()
         .current_dir(temp.path())
-        .args(["--state", "custom_state", "--select", "my_model"])
+        .args(["--target-path", "custom_state", "--select", "my_model"])
         .assert()
         .success()
         .stdout(predicate::str::contains("[my_model]"));

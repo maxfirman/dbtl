@@ -30,7 +30,7 @@ fn run() -> Result<(), AppError> {
             _ => return Err(AppError::usage(err.to_string())),
         },
     };
-    let manifest_path = resolve_manifest_path(&cli.state);
+    let manifest_path = resolve_manifest_path(&cli.target_path);
     let manifest = Manifest::from_path(&manifest_path)?;
     let graph = GraphIndex::from_manifest(&manifest);
 
@@ -64,6 +64,6 @@ fn resolve_selections(
         .collect()
 }
 
-fn resolve_manifest_path(state_dir: &str) -> PathBuf {
-    PathBuf::from(state_dir).join("manifest.json")
+fn resolve_manifest_path(target_path: &str) -> PathBuf {
+    PathBuf::from(target_path).join("manifest.json")
 }

@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(name = "dbtl")]
@@ -6,6 +6,8 @@ use clap::{Parser, Subcommand};
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
+    #[arg(long, global = true, action = ArgAction::SetTrue)]
+    pub version: bool,
     #[arg(short = 's', long, num_args = 1..)]
     pub select: Option<Vec<String>>,
     #[arg(long, default_value = "target")]
@@ -54,5 +56,11 @@ mod tests {
                 command: SelfCommand::Update
             })
         );
+    }
+
+    #[test]
+    fn parses_version_flag() {
+        let cli = Cli::try_parse_from(["dbtl", "--version"]).expect("cli should parse");
+        assert!(cli.version);
     }
 }

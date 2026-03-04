@@ -33,6 +33,11 @@ fn run() -> Result<(), AppError> {
         },
     };
 
+    if cli.version {
+        println!("dbtl {}", version::current_version());
+        return Ok(());
+    }
+
     if let Some(command) = cli.command {
         match command {
             Command::SelfCmd {

@@ -93,6 +93,15 @@ fn self_update_help_exits_successfully() {
 }
 
 #[test]
+fn version_flag_exits_successfully() {
+    binary_cmd()
+        .arg("--version")
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("dbtl "));
+}
+
+#[test]
 fn prints_all_models_when_select_is_omitted() {
     let temp = setup_target_path("target");
     let assert = binary_cmd().current_dir(temp.path()).assert().success();

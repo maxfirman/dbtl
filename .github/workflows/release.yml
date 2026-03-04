@@ -42,6 +42,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package binary
+        shell: bash
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/${{ matrix.bin_name }} dist/${{ matrix.bin_name }}
@@ -51,15 +52,7 @@ jobs:
 
           archive="dbtl-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
           tar -C dist -czf "$archive" ${{ matrix.bin_name }}
-          python - <<'PY' "$archive"
-import hashlib
-import pathlib
-import sys
-
-path = pathlib.Path(sys.argv[1])
-digest = hashlib.sha256(path.read_bytes()).hexdigest()
-path.with_suffix(path.suffix + ".sha256").write_text(f"{digest}  {path.name}\n")
-PY
+          python -c "import hashlib, pathlib, sys; p = pathlib.Path(sys.argv[1]); p.with_suffix(p.suffix + '.sha256').write_text(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\\n')" "$archive"
 
       - name: Upload packaged asset
         uses: actions/upload-artifact@v4

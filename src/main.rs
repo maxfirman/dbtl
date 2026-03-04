@@ -5,6 +5,7 @@ mod manifest;
 mod render;
 
 use clap::Parser;
+use clap::error::ErrorKind;
 use cli::{Cli, SelectorSpec};
 use error::AppError;
 use graph::GraphIndex;
@@ -19,7 +20,16 @@ fn main() {
 }
 
 fn run() -> Result<(), AppError> {
-    let cli = Cli::try_parse().map_err(|e| AppError::usage(e.to_string()))?;
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(err) => match err.kind() {
+            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
+                print!("{err}");
+                return Ok(());
+            }
+            _ => return Err(AppError::usage(err.to_string())),
+        },
+    };
     let manifest_path = resolve_manifest_path(&cli.state);
     let manifest = Manifest::from_path(&manifest_path)?;
     let graph = GraphIndex::from_manifest(&manifest);

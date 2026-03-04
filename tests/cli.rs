@@ -32,6 +32,15 @@ fn binary_cmd() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
 }
 
+#[test]
+fn help_flag_exits_successfully() {
+    binary_cmd()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Usage: dbtl [OPTIONS]"));
+}
+
 fn extracted_nodes(output: &str) -> BTreeSet<String> {
     let mut nodes = BTreeSet::new();
     let bytes = output.as_bytes();

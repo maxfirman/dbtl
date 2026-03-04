@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp target/release/dbtl dist/dbtl
+          chmod +x dist/dbtl
+          tar -C dist -czf dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz dbtl
+          sha256sum dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz > dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz.sha256
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
+            dbtl-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz.sha256
+          generate_release_notes: true

@@ -3,7 +3,18 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 pub fn render_selection(graph: &GraphIndex, root_id: &str, selector: &SelectorSpec) -> String {
-    let nodes = collect_selected_nodes(graph, root_id, selector);
+    let selections = vec![(root_id.to_string(), selector.clone())];
+    render_union_selection(graph, &selections)
+}
+
+pub fn render_union_selection(
+    graph: &GraphIndex,
+    selections: &[(String, SelectorSpec)],
+) -> String {
+    let mut nodes = HashSet::new();
+    for (root_id, selector) in selections {
+        nodes.extend(collect_selected_nodes(graph, root_id, selector));
+    }
     render_components(graph, &nodes)
 }
 
@@ -39,26 +50,56 @@ fn collect_selected_nodes(graph: &GraphIndex, root_id: &str, selector: &Selector
     let mut nodes = HashSet::new();
     nodes.insert(root_id.to_string());
 
-    if selector.include_ancestors {
-        collect_reachable(graph, root_id, Direction::Up, &mut nodes);
+    if selector.includes_ancestors() {
+        collect_reachable(
+            graph,
+            root_id,
+            Direction::Up,
+            selector.ancestor_depth_or_unbounded(),
+            &mut nodes,
+        );
     }
-    if selector.include_descendants {
-        collect_reachable(graph, root_id, Direction::Down, &mut nodes);
+    if selector.includes_descendants() {
+        collect_reachable(
+            graph,
+            root_id,
+            Direction::Down,
+            selector.descendant_depth_or_unbounded(),
+            &mut nodes,
+        );
     }
 
     nodes
 }
 
-fn collect_reachable(graph: &GraphIndex, start: &str, direction: Direction, out: &mut HashSet<String>) {
-    let mut stack = vec![start.to_string()];
-    while let Some(current) = stack.pop() {
+fn collect_reachable(
+    graph: &GraphIndex,
+    start: &str,
+    direction: Direction,
+    max_depth: usize,
+    out: &mut HashSet<String>,
+) {
+    let mut stack = vec![(start.to_string(), 0usize)];
+    let mut best_depth = HashMap::<String, usize>::new();
+    best_depth.insert(start.to_string(), 0);
+
+    while let Some((current, depth)) = stack.pop() {
+        if depth >= max_depth {
+            continue;
+        }
         let neighbors = match direction {
             Direction::Up => graph.parents_of(&current),
             Direction::Down => graph.children_of(&current),
         };
         for neighbor in neighbors {
-            if out.insert(neighbor.clone()) {
-                stack.push(neighbor.clone());
+            let next_depth = depth + 1;
+            let should_visit = best_depth
+                .get(neighbor.as_str())
+                .is_none_or(|prev| next_depth < *prev);
+            if should_visit {
+                best_depth.insert(neighbor.clone(), next_depth);
+                out.insert(neighbor.clone());
+                stack.push((neighbor.clone(), next_depth));
             }
         }
     }
@@ -398,7 +439,7 @@ fn node_spacing_bonus(
     let fan_out = out_degree.get(node_id).copied().unwrap_or(0);
     let fan_in = in_degree.get(node_id).copied().unwrap_or(0);
     let branchiness = fan_out.max(fan_in).saturating_sub(1);
-    (branchiness * 2).min(6)
+    branchiness.min(1)
 }
 
 fn compute_layer_height(
@@ -770,8 +811,8 @@ mod tests {
     fn renders_selected_only() {
         let graph = graph_fixture();
         let selector = SelectorSpec {
-            include_ancestors: false,
-            include_descendants: false,
+            ancestor_depth: None,
+            descendant_depth: None,
             model_name: "mid".to_string(),
         };
         let rendered = render_selection(&graph, "model.pkg.mid", &selector);
@@ -784,8 +825,8 @@ mod tests {
     fn renders_descendants_dag() {
         let graph = graph_fixture();
         let selector = SelectorSpec {
-            include_ancestors: false,
-            include_descendants: true,
+            ancestor_depth: None,
+            descendant_depth: Some(usize::MAX),
             model_name: "mid".to_string(),
         };
         let rendered = render_selection(&graph, "model.pkg.mid", &selector);
@@ -797,8 +838,8 @@ mod tests {
     fn renders_ancestors_dag() {
         let graph = graph_fixture();
         let selector = SelectorSpec {
-            include_ancestors: true,
-            include_descendants: false,
+            ancestor_depth: Some(usize::MAX),
+            descendant_depth: None,
             model_name: "mid".to_string(),
         };
         let rendered = render_selection(&graph, "model.pkg.mid", &selector);
@@ -810,8 +851,8 @@ mod tests {
     fn renders_both_directions_in_single_dag() {
         let graph = graph_fixture();
         let selector = SelectorSpec {
-            include_ancestors: true,
-            include_descendants: true,
+            ancestor_depth: Some(usize::MAX),
+            descendant_depth: Some(usize::MAX),
             model_name: "mid".to_string(),
         };
         let rendered = render_selection(&graph, "model.pkg.mid", &selector);
@@ -888,8 +929,8 @@ mod tests {
             child_map,
         });
         let selector = SelectorSpec {
-            include_ancestors: false,
-            include_descendants: true,
+            ancestor_depth: None,
+            descendant_depth: Some(usize::MAX),
             model_name: "a".to_string(),
         };
 

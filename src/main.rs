@@ -53,12 +53,24 @@ fn run() -> Result<(), AppError> {
     let manifest = Manifest::from_path(&manifest_path).map_err(AppError::runtime)?;
     let graph = GraphIndex::from_manifest(&manifest);
     let output = match cli.select {
-        Some(raw_selector) => {
-            let selector = SelectorSpec::parse(&raw_selector)?;
-            let root_id = graph
-                .resolve_model(&selector.model_name)
-                .map_err(AppError::runtime)?;
-            render::render_selection(&graph, root_id, &selector)
+        Some(raw_selectors) => {
+            if raw_selectors.len() == 1 {
+                let selector = SelectorSpec::parse(&raw_selectors[0])?;
+                let root_id = graph
+                    .resolve_model(&selector.model_name)
+                    .map_err(AppError::runtime)?;
+                render::render_selection(&graph, root_id, &selector)
+            } else {
+                let mut selections = Vec::<(String, SelectorSpec)>::new();
+                for raw_selector in raw_selectors {
+                    let selector = SelectorSpec::parse(&raw_selector)?;
+                    let root_id = graph
+                        .resolve_model(&selector.model_name)
+                        .map_err(AppError::runtime)?;
+                    selections.push((root_id.to_string(), selector));
+                }
+                render::render_union_selection(&graph, &selections)
+            }
         }
         None => render::render_all_models(&graph),
     };

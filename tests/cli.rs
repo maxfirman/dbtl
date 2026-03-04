@@ -121,3 +121,43 @@ fn short_select_flag_is_supported() {
         .stdout(predicate::str::contains("[my_model]"))
         .stdout(predicate::str::contains("[child_a]"));
 }
+
+#[test]
+fn supports_union_with_space_separated_selectors() {
+    let temp = setup_state_dir("target");
+    let mut cmd = binary_cmd();
+    cmd.current_dir(temp.path())
+        .args(["-s", "my_model", "child_a+"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[my_model]"))
+        .stdout(predicate::str::contains("[child_a]"))
+        .stdout(predicate::str::contains("[grandchild]"));
+}
+
+#[test]
+fn supports_ancestor_depth_prefix() {
+    let temp = setup_state_dir("target");
+    let mut cmd = binary_cmd();
+    cmd.current_dir(temp.path())
+        .args(["-s", "1+grandchild"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[grandchild]"))
+        .stdout(predicate::str::contains("[child_a]"))
+        .stdout(predicate::str::contains("[my_model]").not());
+}
+
+#[test]
+fn supports_descendant_depth_suffix() {
+    let temp = setup_state_dir("target");
+    let mut cmd = binary_cmd();
+    cmd.current_dir(temp.path())
+        .args(["-s", "my_model+1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[my_model]"))
+        .stdout(predicate::str::contains("[child_a]"))
+        .stdout(predicate::str::contains("[child_b]"))
+        .stdout(predicate::str::contains("[grandchild]").not());
+}

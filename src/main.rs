@@ -4,6 +4,7 @@ mod graph;
 mod manifest;
 mod render;
 mod selector;
+mod version;
 
 use clap::Parser;
 use clap::error::ErrorKind;
@@ -11,7 +12,6 @@ use cli::{Cli, Command, SelfCommand};
 use error::AppError;
 use graph::GraphIndex;
 use manifest::Manifest;
-use self_update::cargo_crate_version;
 use std::path::PathBuf;
 
 fn main() {
@@ -61,12 +61,13 @@ fn resolve_manifest_path(target_path: &str) -> PathBuf {
 }
 
 fn run_self_update() -> Result<(), AppError> {
+    let current_version = version::current_version();
     let status = self_update::backends::github::Update::configure()
         .repo_owner("maxfirman")
         .repo_name("dbtl")
         .bin_name("dbtl")
         .show_download_progress(true)
-        .current_version(cargo_crate_version!())
+        .current_version(current_version)
         .build()
         .map_err(|err| AppError::self_update(err.to_string()))?
         .update()

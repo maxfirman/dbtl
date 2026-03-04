@@ -39,6 +39,8 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build release binary
+        env:
+          DBTL_VERSION: ${{ github.ref_name }}
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package binary

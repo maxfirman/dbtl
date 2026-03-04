@@ -111,6 +111,7 @@ pub(super) fn render_ascii_cards(graph: &GraphIndex, layout: &Layout) -> String 
     reinforce_vertical_between_junctions(&mut canvas);
     ensure_arrow_stems(&mut canvas);
     replace_branch_junctions(&mut canvas);
+    enforce_junction_vertical_spacing(&mut canvas);
 
     canvas
         .into_iter()
@@ -209,6 +210,46 @@ fn replace_branch_junctions(canvas: &mut [Vec<char>]) {
     }
 }
 
+fn enforce_junction_vertical_spacing(canvas: &mut Vec<Vec<char>>) {
+    if canvas.is_empty() || canvas[0].is_empty() {
+        return;
+    }
+
+    loop {
+        let mut inserted = false;
+        let height = canvas.len();
+        let width = canvas[0].len();
+
+        for y in 0..height.saturating_sub(1) {
+            let mut found_adjacent_junction = false;
+            for x in 0..width {
+                if is_junction(canvas[y][x]) && is_junction(canvas[y + 1][x]) {
+                    found_adjacent_junction = true;
+                    break;
+                }
+            }
+
+            if !found_adjacent_junction {
+                continue;
+            }
+
+            let mut spacer = vec![' '; width];
+            for x in 0..width {
+                if connects_down(canvas[y][x]) && connects_up(canvas[y + 1][x]) {
+                    spacer[x] = '|';
+                }
+            }
+            canvas.insert(y + 1, spacer);
+            inserted = true;
+            break;
+        }
+
+        if !inserted {
+            break;
+        }
+    }
+}
+
 fn connects_left(ch: char) -> bool {
     matches!(ch, '-' | '+' | '•' | '>')
 }
@@ -223,6 +264,10 @@ fn connects_up(ch: char) -> bool {
 
 fn connects_down(ch: char) -> bool {
     matches!(ch, '|' | '+' | '•')
+}
+
+fn is_junction(ch: char) -> bool {
+    matches!(ch, '+' | '•')
 }
 
 fn degree_maps(edges: &[(String, String)]) -> (HashMap<String, usize>, HashMap<String, usize>) {
@@ -307,7 +352,8 @@ fn merge_chars(existing: char, incoming: char) -> char {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_arrow_stems, reinforce_vertical_between_junctions, replace_branch_junctions,
+        enforce_junction_vertical_spacing, ensure_arrow_stems,
+        reinforce_vertical_between_junctions, replace_branch_junctions,
     };
 
     #[test]
@@ -378,5 +424,18 @@ mod tests {
 
         replace_branch_junctions(&mut canvas);
         assert_eq!(canvas[1][1], '+');
+    }
+
+    #[test]
+    fn inserts_spacer_pipe_between_adjacent_junctions() {
+        let mut canvas = vec![vec![' '; 1]; 2];
+        canvas[0][0] = '+';
+        canvas[1][0] = '•';
+
+        enforce_junction_vertical_spacing(&mut canvas);
+        assert_eq!(canvas.len(), 3);
+        assert_eq!(canvas[0][0], '+');
+        assert_eq!(canvas[1][0], '|');
+        assert_eq!(canvas[2][0], '•');
     }
 }

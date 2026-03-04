@@ -9,7 +9,7 @@ It is designed for fast local inspection, with short commands and selector synta
 - Reads dbt metadata from `<target-path>/manifest.json` (default target path: `target`)
 - Builds a model-only DAG (`resource_type == "model"`)
 - Renders lineage as left-to-right ASCII graphs
-- Supports selector unions and depth-limited traversal
+- Supports dbt-style set operators, methods, and graph traversal selectors
 
 ## Installation
 
@@ -40,11 +40,16 @@ dbtl [--target-path <DIR>] [-s|--select <SELECTOR>...]
 ### Arguments
 
 - `--target-path <DIR>`: directory containing `manifest.json` (default: `target`)
-- `-s, --select <SELECTOR>...`: one or more selectors (space-separated) to union
+- `-s, --select <SELECTOR>...`: one or more selectors (space-separated union)
 
 If `--select` is omitted, `dbtl` renders all model nodes in the manifest.
 
 ## Selector Syntax
+
+Set operators:
+
+- Space-separated selector arguments are **unioned**.
+- Comma-separated terms inside one selector argument are **intersected**.
 
 Supported selector forms:
 
@@ -54,17 +59,32 @@ Supported selector forms:
 - `+model+` - ancestors + selected node + descendants
 - `N+model` - ancestors up to depth `N` + selected node
 - `model+N` - selected node + descendants up to depth `N`
+- `@model` - model + descendants + ancestors required by descendants
 - `N+model+M` - ancestors up to `N` and descendants up to `M`
+
+Supported selector methods:
+
+- `tag:<value>` (supports `*` and `?` wildcards)
+- `fqn:<value>` (supports `*` and `?` wildcards)
+- `path:<value>` (supports exact file, directory prefix, and wildcards)
+- `config.<key.path>:<value>` (supports nested keys and scalar/array matches)
 
 Depth values must be positive integers (`>= 1`).
 
-### Union selectors
+### Set operator examples
 
-Multiple selectors are unioned into one rendered subgraph:
+Space-separated selectors are unioned:
 
 ```bash
 dbtl -s model_a model_b+
 dbtl -s 1+orders stg_customers
+```
+
+Comma-separated selectors are intersected:
+
+```bash
+dbtl -s tag:finance,config.materialized:table
+dbtl -s fqn:pkg.marts.*,path:models/marts
 ```
 
 ## Examples
@@ -93,6 +113,12 @@ dbtl -s 1+customers
 dbtl -s 2+orders+1
 ```
 
+### Show buildable closure with `@`
+
+```bash
+dbtl -s @orders
+```
+
 ### Example output shape
 
 ```text
@@ -107,9 +133,10 @@ dbtl -s 2+orders+1
 ## Behavior Notes
 
 - Node type scope is currently **models only**.
-- Model name resolution uses `nodes.*.name`.
+- Bare selectors first resolve exact model names via `nodes.*.name`.
 - Ambiguous names (same model name in multiple packages) return an error with candidates.
 - Disconnected components are rendered as separate blocks.
+- State-based selector methods are intentionally not implemented yet.
 
 ## Exit Codes
 

@@ -52,6 +52,40 @@ fn parses_fresh_jaffle_project_and_queries_lineage() {
         .args([
             "--target-path",
             target_dir.to_str().expect("path should be valid utf-8"),
+            "--select",
+            "path:models/staging",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[stg_orders]"))
+        .stdout(predicate::str::contains("[stg_customers]"));
+
+    Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
+        .args([
+            "--target-path",
+            target_dir.to_str().expect("path should be valid utf-8"),
+            "--select",
+            "config.materialized:view",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[stg_orders]"));
+
+    Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
+        .args([
+            "--target-path",
+            target_dir.to_str().expect("path should be valid utf-8"),
+            "--select",
+            "fqn:jaffle_shop_project.staging.*",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[stg_orders]"));
+
+    Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
+        .args([
+            "--target-path",
+            target_dir.to_str().expect("path should be valid utf-8"),
         ])
         .assert()
         .success()

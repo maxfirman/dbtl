@@ -1,4 +1,5 @@
 use crate::{error::AppError, manifest::Manifest};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -6,6 +7,10 @@ pub struct ModelNode {
     pub unique_id: String,
     pub name: String,
     pub package_name: String,
+    pub fqn: Vec<String>,
+    pub tags: Vec<String>,
+    pub original_file_path: String,
+    pub config: Value,
 }
 
 #[derive(Debug)]
@@ -30,6 +35,10 @@ impl GraphIndex {
                 unique_id: unique_id.clone(),
                 name: node.name.clone(),
                 package_name: node.package_name.clone(),
+                fqn: node.fqn.clone(),
+                tags: node.tags.clone(),
+                original_file_path: node.original_file_path.clone(),
+                config: node.config.clone(),
             };
             by_unique_id.insert(unique_id.clone(), model);
             name_to_ids
@@ -138,6 +147,162 @@ impl GraphIndex {
         });
         ids
     }
+
+    pub fn select_by_tag_pattern(&self, pattern: &str) -> HashSet<String> {
+        self.by_unique_id
+            .iter()
+            .filter(|(_, node)| {
+                node.tags
+                    .iter()
+                    .any(|tag| wildcard_match(pattern, tag.as_str()))
+            })
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    pub fn select_by_fqn_pattern(&self, pattern: &str) -> HashSet<String> {
+        self.by_unique_id
+            .iter()
+            .filter(|(_, node)| wildcard_match(pattern, node.fqn.join(".").as_str()))
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    pub fn select_by_path_pattern(&self, pattern: &str) -> HashSet<String> {
+        self.by_unique_id
+            .iter()
+            .filter(|(_, node)| path_matches(pattern, node.original_file_path.as_str()))
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    pub fn select_by_config_value(&self, key_path: &[String], expected: &str) -> HashSet<String> {
+        self.by_unique_id
+            .iter()
+            .filter(|(_, node)| match_config_value(&node.config, key_path, expected))
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    pub fn select_by_name_pattern(&self, pattern: &str) -> HashSet<String> {
+        self.by_unique_id
+            .iter()
+            .filter(|(_, node)| wildcard_match(pattern, node.name.as_str()))
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    pub fn expand_ancestors(&self, seeds: &HashSet<String>, max_depth: usize) -> HashSet<String> {
+        expand_direction(self, seeds, max_depth, Direction::Up)
+    }
+
+    pub fn expand_descendants(&self, seeds: &HashSet<String>, max_depth: usize) -> HashSet<String> {
+        expand_direction(self, seeds, max_depth, Direction::Down)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Direction {
+    Up,
+    Down,
+}
+
+fn expand_direction(
+    graph: &GraphIndex,
+    seeds: &HashSet<String>,
+    max_depth: usize,
+    direction: Direction,
+) -> HashSet<String> {
+    let mut out = HashSet::new();
+    let mut best_depth = HashMap::<String, usize>::new();
+    let mut stack = Vec::<(String, usize)>::new();
+    for seed in seeds {
+        best_depth.insert(seed.clone(), 0);
+        stack.push((seed.clone(), 0));
+    }
+
+    while let Some((current, depth)) = stack.pop() {
+        if depth >= max_depth {
+            continue;
+        }
+        let neighbors = match direction {
+            Direction::Up => graph.parents_of(&current),
+            Direction::Down => graph.children_of(&current),
+        };
+        for neighbor in neighbors {
+            let next_depth = depth + 1;
+            let should_visit = best_depth
+                .get(neighbor.as_str())
+                .is_none_or(|prev| next_depth < *prev);
+            if should_visit {
+                best_depth.insert(neighbor.clone(), next_depth);
+                out.insert(neighbor.clone());
+                stack.push((neighbor.clone(), next_depth));
+            }
+        }
+    }
+
+    out
+}
+
+fn wildcard_match(pattern: &str, input: &str) -> bool {
+    let p = pattern.as_bytes();
+    let s = input.as_bytes();
+    let mut dp = vec![vec![false; s.len() + 1]; p.len() + 1];
+    dp[0][0] = true;
+
+    for i in 1..=p.len() {
+        if p[i - 1] == b'*' {
+            dp[i][0] = dp[i - 1][0];
+        }
+    }
+
+    for i in 1..=p.len() {
+        for j in 1..=s.len() {
+            dp[i][j] = match p[i - 1] {
+                b'*' => dp[i - 1][j] || dp[i][j - 1],
+                b'?' => dp[i - 1][j - 1],
+                ch => dp[i - 1][j - 1] && ch == s[j - 1],
+            };
+        }
+    }
+
+    dp[p.len()][s.len()]
+}
+
+fn path_matches(pattern: &str, path: &str) -> bool {
+    if pattern.contains('*') || pattern.contains('?') {
+        return wildcard_match(pattern, path);
+    }
+    path == pattern || path.starts_with(format!("{pattern}/").as_str())
+}
+
+fn match_config_value(value: &Value, key_path: &[String], expected: &str) -> bool {
+    let Some(found) = lookup_config_value(value, key_path) else {
+        return false;
+    };
+    value_contains(found, expected)
+}
+
+fn lookup_config_value<'a>(value: &'a Value, key_path: &[String]) -> Option<&'a Value> {
+    if key_path.is_empty() {
+        return Some(value);
+    }
+    let mut current = value;
+    for key in key_path {
+        current = current.get(key)?;
+    }
+    Some(current)
+}
+
+fn value_contains(value: &Value, expected: &str) -> bool {
+    match value {
+        Value::String(v) => v == expected,
+        Value::Bool(v) => v.to_string() == expected,
+        Value::Number(v) => v.to_string() == expected,
+        Value::Array(values) => values.iter().any(|v| value_contains(v, expected)),
+        _ => false,
+    }
 }
 
 fn filter_edges(
@@ -169,40 +334,39 @@ mod tests {
     use proptest::prelude::*;
     use std::collections::HashMap;
 
+    fn model_entry(name: &str, package: &str) -> NodeEntry {
+        NodeEntry {
+            resource_type: "model".to_string(),
+            name: name.to_string(),
+            package_name: package.to_string(),
+            fqn: vec![],
+            tags: vec![],
+            original_file_path: String::new(),
+            config: serde_json::json!({}),
+        }
+    }
+
+    fn test_entry(name: &str, package: &str) -> NodeEntry {
+        NodeEntry {
+            resource_type: "test".to_string(),
+            name: name.to_string(),
+            package_name: package.to_string(),
+            fqn: vec![],
+            tags: vec![],
+            original_file_path: String::new(),
+            config: serde_json::json!({}),
+        }
+    }
+
     fn fixture_manifest() -> Manifest {
         let mut nodes = HashMap::new();
-        nodes.insert(
-            "model.pkg.a".to_string(),
-            NodeEntry {
-                resource_type: "model".to_string(),
-                name: "a".to_string(),
-                package_name: "pkg".to_string(),
-            },
-        );
-        nodes.insert(
-            "model.pkg.b".to_string(),
-            NodeEntry {
-                resource_type: "model".to_string(),
-                name: "b".to_string(),
-                package_name: "pkg".to_string(),
-            },
-        );
+        nodes.insert("model.pkg.a".to_string(), model_entry("a", "pkg"));
+        nodes.insert("model.pkg.b".to_string(), model_entry("b", "pkg"));
         nodes.insert(
             "test.pkg.b_not_null".to_string(),
-            NodeEntry {
-                resource_type: "test".to_string(),
-                name: "b_not_null".to_string(),
-                package_name: "pkg".to_string(),
-            },
+            test_entry("b_not_null", "pkg"),
         );
-        nodes.insert(
-            "model.other.b".to_string(),
-            NodeEntry {
-                resource_type: "model".to_string(),
-                name: "b".to_string(),
-                package_name: "other".to_string(),
-            },
-        );
+        nodes.insert("model.other.b".to_string(), model_entry("b", "other"));
 
         let mut parent_map = HashMap::new();
         parent_map.insert("model.pkg.b".to_string(), vec!["model.pkg.a".to_string()]);
@@ -249,19 +413,11 @@ mod tests {
             let mut nodes = HashMap::new();
             nodes.insert(
                 "model.pkg.m".to_string(),
-                NodeEntry {
-                    resource_type: "model".to_string(),
-                    name: "m".to_string(),
-                    package_name: "pkg".to_string(),
-                },
+                model_entry("m", "pkg"),
             );
             nodes.insert(
                 "test.pkg.t".to_string(),
-                NodeEntry {
-                    resource_type: "test".to_string(),
-                    name: "t".to_string(),
-                    package_name: "pkg".to_string(),
-                },
+                test_entry("t", "pkg"),
             );
 
             let mut parent_map = HashMap::new();

@@ -3,22 +3,49 @@
     "model.pkg.my_model": {
       "resource_type": "model",
       "name": "my_model",
-      "package_name": "pkg"
+      "package_name": "pkg",
+      "fqn": ["pkg", "staging", "my_model"],
+      "tags": ["nightly", "base"],
+      "original_file_path": "models/staging/my_model.sql",
+      "config": {
+        "materialized": "view",
+        "meta": { "contains_pii": false }
+      }
     },
     "model.pkg.child_a": {
       "resource_type": "model",
       "name": "child_a",
-      "package_name": "pkg"
+      "package_name": "pkg",
+      "fqn": ["pkg", "marts", "child_a"],
+      "tags": ["nightly", "finance"],
+      "original_file_path": "models/marts/child_a.sql",
+      "config": {
+        "materialized": "table",
+        "meta": { "contains_pii": true },
+        "tags": ["finance"]
+      }
     },
     "model.pkg.child_b": {
       "resource_type": "model",
       "name": "child_b",
-      "package_name": "pkg"
+      "package_name": "pkg",
+      "fqn": ["pkg", "marts", "child_b"],
+      "tags": ["daily"],
+      "original_file_path": "models/marts/child_b.sql",
+      "config": {
+        "materialized": "incremental"
+      }
     },
     "model.pkg.grandchild": {
       "resource_type": "model",
       "name": "grandchild",
-      "package_name": "pkg"
+      "package_name": "pkg",
+      "fqn": ["pkg", "marts", "grandchild"],
+      "tags": ["finance"],
+      "original_file_path": "models/marts/grandchild.sql",
+      "config": {
+        "materialized": "table"
+      }
     },
     "test.pkg.some_test": {
       "resource_type": "test",

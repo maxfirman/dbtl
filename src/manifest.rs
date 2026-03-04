@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use serde::Deserialize;
+use serde_json::Value;
 use std::{collections::HashMap, fs, path::Path};
 
 #[derive(Debug, Deserialize)]
@@ -17,6 +18,14 @@ pub struct NodeEntry {
     pub resource_type: String,
     pub name: String,
     pub package_name: String,
+    #[serde(default)]
+    pub fqn: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub original_file_path: String,
+    #[serde(default)]
+    pub config: Value,
 }
 
 impl Manifest {

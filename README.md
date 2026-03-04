@@ -19,7 +19,7 @@ Download the latest Linux release archive and extract `dbtl`:
 
 ```bash
 curl -fL -o dbtl.tar.gz \
-  https://github.com/maxfirman/dbtl/releases/latest/download/dbtl-v0.1.2-x86_64-unknown-linux-gnu.tar.gz
+  https://github.com/maxfirman/dbtl/releases/latest/download/dbtl-v0.1.3-x86_64-unknown-linux-gnu.tar.gz
 tar -xzf dbtl.tar.gz
 chmod +x dbtl
 ```

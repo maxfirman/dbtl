@@ -11,6 +11,15 @@ fn setup_state_dir(state_name: &str) -> TempDir {
     temp
 }
 
+fn setup_state_dir_with_manifest(state_name: &str, manifest_json: &str) -> TempDir {
+    let temp = TempDir::new().expect("temp dir should be created");
+    let state_path = temp.path().join(state_name);
+    fs::create_dir_all(&state_path).expect("state dir should be created");
+    fs::write(state_path.join("manifest.json"), manifest_json)
+        .expect("manifest should be written");
+    temp
+}
+
 fn copy_fixture_manifest(dest: &Path) {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -160,4 +169,49 @@ fn supports_descendant_depth_suffix() {
         .stdout(predicate::str::contains("[child_a]"))
         .stdout(predicate::str::contains("[child_b]"))
         .stdout(predicate::str::contains("[grandchild]").not());
+}
+
+#[test]
+fn missing_manifest_exits_with_runtime_code() {
+    let temp = TempDir::new().expect("temp dir should be created");
+    fs::create_dir_all(temp.path().join("target")).expect("target dir should be created");
+
+    let mut cmd = binary_cmd();
+    cmd.current_dir(temp.path())
+        .args(["-s", "my_model"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("manifest.json not found"));
+}
+
+#[test]
+fn unknown_model_exits_with_runtime_code() {
+    let temp = setup_state_dir("target");
+    let mut cmd = binary_cmd();
+    cmd.current_dir(temp.path())
+        .args(["-s", "does_not_exist"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("model 'does_not_exist' not found"));
+}
+
+#[test]
+fn ambiguous_model_name_exits_with_runtime_code() {
+    let temp = setup_state_dir_with_manifest(
+        "target",
+        r#"{
+            "nodes": {
+                "model.pkg_a.orders": {"resource_type":"model","name":"orders","package_name":"pkg_a"},
+                "model.pkg_b.orders": {"resource_type":"model","name":"orders","package_name":"pkg_b"}
+            },
+            "parent_map": {},
+            "child_map": {}
+        }"#,
+    );
+    let mut cmd = binary_cmd();
+    cmd.current_dir(temp.path())
+        .args(["-s", "orders"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("is ambiguous"));
 }

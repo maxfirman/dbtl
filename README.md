@@ -122,10 +122,15 @@ dbtl -s @orders
 ### Example output shape
 
 ```text
-[stg_orders]---------+--------------------+
+[stg_orders]---------•--------------------+
                      |                    |
-[stg_order_items]----+-->[order_items]----+-->[orders]----+-->[customers]
-[stg_products]-------+                                    |
+                     |                    |
+[stg_order_items]----•                    |
+                     |                    |
+                     •-->[order_items]----•-->[orders]----•-->[customers]
+                     |                                    |
+[stg_products]-------•                                    |
+                     |                                    |
 [stg_supplies]-------+                                    |
 [stg_customers]-------------------------------------------+
 ```

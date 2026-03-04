@@ -74,6 +74,11 @@ fn parse_atomic_selector(raw: &str) -> Result<AtomicSelector, AppError> {
 
     let (ancestor_depth, after_prefix) = parse_prefix_plus(remaining)?;
     let (descendant_depth, core) = parse_suffix_plus(after_prefix)?;
+    if at && descendant_depth.is_some() {
+        return Err(AppError::usage(format!(
+            "{INVALID_SELECTOR_MSG}: \"@\" and trailing \"+\" are incompatible"
+        )));
+    }
 
     if core.is_empty() {
         return Err(AppError::usage(format!(
@@ -205,7 +210,9 @@ fn evaluate_atomic_selector(
 
     if selector.graph.at {
         let descendants = graph.expand_descendants(&base, usize::MAX);
-        let needed_ancestors = graph.expand_ancestors(&descendants, usize::MAX);
+        let mut anchor = base.clone();
+        anchor.extend(descendants.clone());
+        let needed_ancestors = graph.expand_ancestors(&anchor, usize::MAX);
         selected.extend(descendants);
         selected.extend(needed_ancestors);
     }
@@ -369,10 +376,19 @@ mod tests {
 
     #[test]
     fn parses_graph_operators_and_methods() {
-        let parsed = parse_atomic_selector("@1+tag:nightly+2").expect("selector should parse");
+        let parsed = parse_atomic_selector("@1+tag:nightly").expect("selector should parse");
         assert!(parsed.graph.at);
         assert_eq!(parsed.graph.ancestor_depth, Some(1));
-        assert_eq!(parsed.graph.descendant_depth, Some(2));
+        assert_eq!(parsed.graph.descendant_depth, None);
+    }
+
+    #[test]
+    fn rejects_at_with_trailing_plus() {
+        let err = parse_atomic_selector("@orders+").expect_err("selector should fail");
+        assert!(
+            err.to_string()
+                .contains("\"@\" and trailing \"+\" are incompatible")
+        );
     }
 
     #[test]
@@ -445,6 +461,13 @@ mod tests {
         let graph = graph_fixture();
         let selected =
             resolve_selectors(&graph, &["@root".to_string()]).expect("selectors should resolve");
+        assert_eq!(
+            selected,
+            set(&["model.pkg.root", "model.pkg.mid", "model.pkg.leaf"])
+        );
+
+        let selected =
+            resolve_selectors(&graph, &["@leaf".to_string()]).expect("selectors should resolve");
         assert_eq!(
             selected,
             set(&["model.pkg.root", "model.pkg.mid", "model.pkg.leaf"])

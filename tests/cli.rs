@@ -182,6 +182,23 @@ fn supports_at_graph_operator() {
         &["my_model", "child_a", "child_b", "grandchild"],
     );
     assert_selected_nodes(&["-s", "@child_a"], &["my_model", "child_a", "grandchild"]);
+    assert_selected_nodes(
+        &["-s", "@grandchild"],
+        &["my_model", "child_a", "grandchild"],
+    );
+}
+
+#[test]
+fn rejects_at_with_trailing_plus() {
+    let temp = setup_target_path("target");
+    binary_cmd()
+        .current_dir(temp.path())
+        .args(["-s", "@my_model+"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains(
+            "\"@\" and trailing \"+\" are incompatible",
+        ));
 }
 
 #[test]

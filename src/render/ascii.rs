@@ -222,8 +222,8 @@ fn enforce_junction_vertical_spacing(canvas: &mut Vec<Vec<char>>) {
 
         for y in 0..height.saturating_sub(1) {
             let mut found_adjacent_junction = false;
-            for x in 0..width {
-                if is_junction(canvas[y][x]) && is_junction(canvas[y + 1][x]) {
+            for (&upper, &lower) in canvas[y].iter().zip(canvas[y + 1].iter()) {
+                if is_junction(upper) && is_junction(lower) {
                     found_adjacent_junction = true;
                     break;
                 }

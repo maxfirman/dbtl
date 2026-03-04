@@ -110,6 +110,7 @@ pub(super) fn render_ascii_cards(graph: &GraphIndex, layout: &Layout) -> String 
 
     reinforce_vertical_between_junctions(&mut canvas);
     ensure_arrow_stems(&mut canvas);
+    replace_branch_junctions(&mut canvas);
 
     canvas
         .into_iter()
@@ -165,6 +166,63 @@ pub(super) fn ensure_arrow_stems(canvas: &mut [Vec<char>]) {
             }
         }
     }
+}
+
+fn replace_branch_junctions(canvas: &mut [Vec<char>]) {
+    if canvas.is_empty() || canvas[0].is_empty() {
+        return;
+    }
+
+    let height = canvas.len();
+    let width = canvas[0].len();
+    let mut to_replace = Vec::<(usize, usize)>::new();
+
+    for y in 0..height {
+        for x in 0..width {
+            if canvas[y][x] != '+' {
+                continue;
+            }
+            let mut connections = 0usize;
+            if x > 0 && connects_right(canvas[y][x - 1]) {
+                connections += 1;
+            }
+            if x + 1 < width && connects_left(canvas[y][x + 1]) {
+                connections += 1;
+            }
+            if y > 0 && connects_down(canvas[y - 1][x]) {
+                connections += 1;
+            }
+            if y + 1 < height && connects_up(canvas[y + 1][x]) {
+                connections += 1;
+            }
+
+            // T-junctions are where edges join/diverge.
+            // Keep '+' for corners (2-way turns) and 4-way crossings.
+            if connections == 3 {
+                to_replace.push((x, y));
+            }
+        }
+    }
+
+    for (x, y) in to_replace {
+        canvas[y][x] = '•';
+    }
+}
+
+fn connects_left(ch: char) -> bool {
+    matches!(ch, '-' | '+' | '•' | '>')
+}
+
+fn connects_right(ch: char) -> bool {
+    matches!(ch, '-' | '+' | '•')
+}
+
+fn connects_up(ch: char) -> bool {
+    matches!(ch, '|' | '+' | '•')
+}
+
+fn connects_down(ch: char) -> bool {
+    matches!(ch, '|' | '+' | '•')
 }
 
 fn degree_maps(edges: &[(String, String)]) -> (HashMap<String, usize>, HashMap<String, usize>) {
@@ -248,7 +306,9 @@ fn merge_chars(existing: char, incoming: char) -> char {
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_arrow_stems, reinforce_vertical_between_junctions};
+    use super::{
+        ensure_arrow_stems, reinforce_vertical_between_junctions, replace_branch_junctions,
+    };
 
     #[test]
     fn inserts_pipe_between_vertical_junctions() {
@@ -282,5 +342,41 @@ mod tests {
         ensure_arrow_stems(&mut canvas);
         assert_eq!(canvas[0][2], '-');
         assert_eq!(canvas[0][1], '-');
+    }
+
+    #[test]
+    fn replaces_tee_junction_with_bullet() {
+        let mut canvas = vec![vec![' '; 3]; 3];
+        canvas[1][0] = '-';
+        canvas[1][1] = '+';
+        canvas[1][2] = '-';
+        canvas[2][1] = '|';
+
+        replace_branch_junctions(&mut canvas);
+        assert_eq!(canvas[1][1], '•');
+    }
+
+    #[test]
+    fn keeps_corner_plus() {
+        let mut canvas = vec![vec![' '; 2]; 2];
+        canvas[0][0] = '+';
+        canvas[0][1] = '-';
+        canvas[1][0] = '|';
+
+        replace_branch_junctions(&mut canvas);
+        assert_eq!(canvas[0][0], '+');
+    }
+
+    #[test]
+    fn keeps_crossing_plus() {
+        let mut canvas = vec![vec![' '; 3]; 3];
+        canvas[1][1] = '+';
+        canvas[1][0] = '-';
+        canvas[1][2] = '-';
+        canvas[0][1] = '|';
+        canvas[2][1] = '|';
+
+        replace_branch_junctions(&mut canvas);
+        assert_eq!(canvas[1][1], '+');
     }
 }

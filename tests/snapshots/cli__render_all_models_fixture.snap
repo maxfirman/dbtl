@@ -1,8 +1,8 @@
 ---
 source: tests/cli.rs
-assertion_line: 85
+assertion_line: 101
 expression: output
 ---
               +-->[child_b]
               |
-[my_model]----+-->[child_a]------->[grandchild]
+[my_model]----•-->[child_a]------->[grandchild]

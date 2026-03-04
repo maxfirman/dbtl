@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use serde::Deserialize;
 use std::{collections::HashMap, fs, path::Path};
 
@@ -19,25 +20,20 @@ pub struct NodeEntry {
 }
 
 impl Manifest {
-    pub fn from_path(path: &Path) -> Result<Self, String> {
+    pub fn from_path(path: &Path) -> Result<Self, AppError> {
         if !path.exists() {
-            return Err(format!(
-                "manifest.json not found at {}",
-                path.to_string_lossy()
-            ));
+            return Err(AppError::MissingManifest {
+                path: path.to_path_buf(),
+            });
         }
 
-        let content = fs::read_to_string(path).map_err(|e| {
-            format!(
-                "failed reading manifest at {}: {e}",
-                path.to_string_lossy()
-            )
+        let content = fs::read_to_string(path).map_err(|source| AppError::ManifestRead {
+            path: path.to_path_buf(),
+            source,
         })?;
-        serde_json::from_str(&content).map_err(|e| {
-            format!(
-                "failed parsing manifest JSON at {}: {e}",
-                path.to_string_lossy()
-            )
+        serde_json::from_str(&content).map_err(|source| AppError::ManifestParse {
+            path: path.to_path_buf(),
+            source,
         })
     }
 }
@@ -45,6 +41,7 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use super::Manifest;
+    use crate::error::AppError;
     use std::fs;
     use tempfile::TempDir;
 
@@ -77,7 +74,14 @@ mod tests {
         let temp = TempDir::new().expect("temp dir should be created");
         let path = temp.path().join("missing_manifest.json");
         let error = Manifest::from_path(&path).expect_err("missing manifest should error");
-        assert!(error.contains("manifest.json not found"));
+
+        match error {
+            AppError::MissingManifest { path: reported } => assert!(
+                reported.ends_with("missing_manifest.json"),
+                "unexpected path: {reported:?}"
+            ),
+            other => panic!("expected missing-manifest error, got: {other:?}"),
+        }
     }
 
     #[test]
@@ -87,6 +91,6 @@ mod tests {
         fs::write(&path, "{invalid_json").expect("manifest should be written");
 
         let error = Manifest::from_path(&path).expect_err("invalid json should error");
-        assert!(error.contains("failed parsing manifest JSON"));
+        assert!(matches!(error, AppError::ManifestParse { .. }));
     }
 }

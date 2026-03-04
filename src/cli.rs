@@ -1,5 +1,10 @@
-use crate::AppError;
+use crate::error::AppError;
 use clap::Parser;
+
+const INVALID_SELECTOR_MSG: &str =
+    "Invalid selector. Allowed forms: model, model+, +model, +model+, N+model, model+N, N+model+M";
+const INVALID_SELECTOR_DEPTH_MSG: &str =
+    "Invalid selector depth. Depth must be a positive integer (for example: 1+model or model+2)";
 
 #[derive(Debug, Parser)]
 #[command(name = "dbtl")]
@@ -26,9 +31,7 @@ impl SelectorSpec {
         let (descendant_depth, core) = parse_suffix(remaining)?;
 
         if core.is_empty() || !core.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-            return Err(AppError::usage(
-                "Invalid selector. Allowed forms: model, model+, +model, +model+, N+model, model+N, N+model+M",
-            ));
+            return Err(AppError::usage(INVALID_SELECTOR_MSG));
         }
 
         Ok(Self {
@@ -38,20 +41,12 @@ impl SelectorSpec {
         })
     }
 
-    pub fn includes_ancestors(&self) -> bool {
-        self.ancestor_depth.is_some()
+    pub fn ancestor_depth_limit(&self) -> Option<usize> {
+        self.ancestor_depth
     }
 
-    pub fn includes_descendants(&self) -> bool {
-        self.descendant_depth.is_some()
-    }
-
-    pub fn ancestor_depth_or_unbounded(&self) -> usize {
-        self.ancestor_depth.unwrap_or(0)
-    }
-
-    pub fn descendant_depth_or_unbounded(&self) -> usize {
-        self.descendant_depth.unwrap_or(0)
+    pub fn descendant_depth_limit(&self) -> Option<usize> {
+        self.descendant_depth
     }
 }
 
@@ -65,9 +60,7 @@ fn parse_prefix(raw: &str) -> Result<(Option<usize>, &str), AppError> {
         return Ok((None, raw));
     }
     if raw.chars().nth(digit_count) != Some('+') {
-        return Err(AppError::usage(
-            "Invalid selector. Allowed forms: model, model+, +model, +model+, N+model, model+N, N+model+M",
-        ));
+        return Err(AppError::usage(INVALID_SELECTOR_MSG));
     }
 
     let depth = parse_positive_depth(&raw[..digit_count])?;
@@ -82,17 +75,13 @@ fn parse_suffix(raw: &str) -> Result<(Option<usize>, String), AppError> {
     let model = &raw[..plus_idx];
     let suffix = &raw[plus_idx + 1..];
     if model.contains('+') {
-        return Err(AppError::usage(
-            "Invalid selector. Allowed forms: model, model+, +model, +model+, N+model, model+N, N+model+M",
-        ));
+        return Err(AppError::usage(INVALID_SELECTOR_MSG));
     }
     if suffix.is_empty() {
         return Ok((Some(SelectorSpec::UNBOUNDED_DEPTH), model.to_string()));
     }
     if !suffix.chars().all(|c| c.is_ascii_digit()) {
-        return Err(AppError::usage(
-            "Invalid selector. Allowed forms: model, model+, +model, +model+, N+model, model+N, N+model+M",
-        ));
+        return Err(AppError::usage(INVALID_SELECTOR_MSG));
     }
 
     let depth = parse_positive_depth(suffix)?;
@@ -100,11 +89,9 @@ fn parse_suffix(raw: &str) -> Result<(Option<usize>, String), AppError> {
 }
 
 fn parse_positive_depth(raw: &str) -> Result<usize, AppError> {
-    let parsed = raw.parse::<usize>().map_err(|_| {
-        AppError::usage(
-            "Invalid selector depth. Depth must be a positive integer (for example: 1+model or model+2)",
-        )
-    })?;
+    let parsed = raw
+        .parse::<usize>()
+        .map_err(|_| AppError::usage(INVALID_SELECTOR_DEPTH_MSG))?;
     if parsed == 0 {
         return Err(AppError::usage(
             "Invalid selector depth. Depth must be >= 1",
@@ -116,6 +103,7 @@ fn parse_positive_depth(raw: &str) -> Result<usize, AppError> {
 #[cfg(test)]
 mod tests {
     use super::SelectorSpec;
+    use proptest::prelude::*;
 
     #[test]
     fn parses_valid_selectors() {
@@ -194,6 +182,21 @@ mod tests {
                 SelectorSpec::parse(selector).is_err(),
                 "selector should fail: {selector}"
             );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn valid_model_names_roundtrip(name in "[A-Za-z_][A-Za-z0-9_]{0,20}") {
+            let parsed = SelectorSpec::parse(&name).expect("generated selector should parse");
+            prop_assert_eq!(parsed.model_name.as_str(), name.as_str());
+            prop_assert_eq!(parsed.ancestor_depth_limit(), None);
+            prop_assert_eq!(parsed.descendant_depth_limit(), None);
+        }
+
+        #[test]
+        fn random_selector_without_allowed_charset_fails(s in "[^A-Za-z0-9_+]{1,12}") {
+            prop_assert!(SelectorSpec::parse(&s).is_err());
         }
     }
 }

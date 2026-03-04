@@ -7,6 +7,10 @@ use tempfile::TempDir;
 
 #[test]
 fn parses_fresh_jaffle_project_and_queries_lineage() {
+    if std::env::var("DBTL_RUN_DBT_ITEST").as_deref() != Ok("1") {
+        eprintln!("skipping: set DBTL_RUN_DBT_ITEST=1 to run dbt integration tests");
+        return;
+    }
     if !dbt_available() {
         eprintln!("skipping: dbt CLI is not installed");
         return;
@@ -45,7 +49,10 @@ fn parses_fresh_jaffle_project_and_queries_lineage() {
         .stdout(predicate::str::contains("customers"));
 
     Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
-        .args(["--state", target_dir.to_str().expect("path should be valid utf-8")])
+        .args([
+            "--state",
+            target_dir.to_str().expect("path should be valid utf-8"),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("[stg_orders]"))

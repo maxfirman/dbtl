@@ -1,4 +1,4 @@
-use crate::manifest::Manifest;
+use crate::{error::AppError, manifest::Manifest};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -50,9 +50,11 @@ impl GraphIndex {
         }
     }
 
-    pub fn resolve_model(&self, model_name: &str) -> Result<&str, String> {
+    pub fn resolve_model(&self, model_name: &str) -> Result<&str, AppError> {
         match self.name_to_ids.get(model_name) {
-            None => Err(format!("model '{model_name}' not found")),
+            None => Err(AppError::ModelNotFound {
+                model_name: model_name.to_string(),
+            }),
             Some(matches) if matches.len() == 1 => Ok(matches[0].as_str()),
             Some(matches) => {
                 let mut candidates = Vec::new();
@@ -61,17 +63,20 @@ impl GraphIndex {
                         .by_unique_id
                         .get(id)
                         .expect("model id in name_to_ids must exist in by_unique_id");
-                    candidates.push(format!("{}.{} ({})", node.package_name, node.name, node.unique_id));
+                    candidates.push(format!(
+                        "{}.{} ({})",
+                        node.package_name, node.name, node.unique_id
+                    ));
                 }
                 candidates.sort();
-                Err(format!(
-                    "model name '{model_name}' is ambiguous. Candidates:\n{}",
-                    candidates
+                Err(AppError::ModelAmbiguous {
+                    model_name: model_name.to_string(),
+                    candidates: candidates
                         .into_iter()
                         .map(|c| format!("  - {c}"))
                         .collect::<Vec<_>>()
-                        .join("\n")
-                ))
+                        .join("\n"),
+                })
             }
         }
     }
@@ -133,7 +138,6 @@ impl GraphIndex {
         });
         ids
     }
-
 }
 
 fn filter_edges(
@@ -162,6 +166,7 @@ fn filter_edges(
 mod tests {
     use super::GraphIndex;
     use crate::manifest::{Manifest, NodeEntry};
+    use proptest::prelude::*;
     use std::collections::HashMap;
 
     fn fixture_manifest() -> Manifest {
@@ -218,7 +223,10 @@ mod tests {
     #[test]
     fn filters_to_model_edges_only() {
         let graph = GraphIndex::from_manifest(&fixture_manifest());
-        assert_eq!(graph.children_of("model.pkg.a"), &["model.pkg.b".to_string()]);
+        assert_eq!(
+            graph.children_of("model.pkg.a"),
+            &["model.pkg.b".to_string()]
+        );
     }
 
     #[test]
@@ -229,7 +237,50 @@ mod tests {
             "model.pkg.a"
         );
         assert!(graph.resolve_model("b").is_err(), "b should be ambiguous");
-        assert!(graph.resolve_model("missing").is_err(), "missing should error");
+        assert!(
+            graph.resolve_model("missing").is_err(),
+            "missing should error"
+        );
     }
 
+    proptest! {
+        #[test]
+        fn non_model_nodes_are_always_filtered(edge_count in 0usize..20) {
+            let mut nodes = HashMap::new();
+            nodes.insert(
+                "model.pkg.m".to_string(),
+                NodeEntry {
+                    resource_type: "model".to_string(),
+                    name: "m".to_string(),
+                    package_name: "pkg".to_string(),
+                },
+            );
+            nodes.insert(
+                "test.pkg.t".to_string(),
+                NodeEntry {
+                    resource_type: "test".to_string(),
+                    name: "t".to_string(),
+                    package_name: "pkg".to_string(),
+                },
+            );
+
+            let mut parent_map = HashMap::new();
+            let mut child_map = HashMap::new();
+            let mut test_edges = Vec::new();
+            for _ in 0..edge_count {
+                test_edges.push("test.pkg.t".to_string());
+            }
+            parent_map.insert("model.pkg.m".to_string(), test_edges.clone());
+            child_map.insert("model.pkg.m".to_string(), test_edges);
+
+            let graph = GraphIndex::from_manifest(&Manifest {
+                nodes,
+                parent_map,
+                child_map,
+            });
+
+            prop_assert!(graph.parents_of("model.pkg.m").is_empty());
+            prop_assert!(graph.children_of("model.pkg.m").is_empty());
+        }
+    }
 }

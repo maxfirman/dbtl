@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use std::collections::BTreeSet;
 use std::{fs, path::Path};
 use tempfile::TempDir;
 
@@ -15,8 +16,7 @@ fn setup_state_dir_with_manifest(state_name: &str, manifest_json: &str) -> TempD
     let temp = TempDir::new().expect("temp dir should be created");
     let state_path = temp.path().join(state_name);
     fs::create_dir_all(&state_path).expect("state dir should be created");
-    fs::write(state_path.join("manifest.json"), manifest_json)
-        .expect("manifest should be written");
+    fs::write(state_path.join("manifest.json"), manifest_json).expect("manifest should be written");
     temp
 }
 
@@ -32,76 +32,133 @@ fn binary_cmd() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("dbtl"))
 }
 
+fn extracted_nodes(output: &str) -> BTreeSet<String> {
+    let mut nodes = BTreeSet::new();
+    let bytes = output.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] == b'[' {
+            let start = i + 1;
+            if let Some(end_rel) = bytes[start..].iter().position(|b| *b == b']') {
+                let end = start + end_rel;
+                if let Ok(label) = std::str::from_utf8(&bytes[start..end])
+                    && !label.is_empty()
+                {
+                    nodes.insert(label.to_string());
+                }
+                i = end + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    nodes
+}
+
 #[test]
 fn prints_selected_only() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    let assert = binary_cmd()
+        .current_dir(temp.path())
         .args(["--select", "my_model"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("[my_model]"))
-        .stdout(predicate::str::contains("["));
+        .success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from(["my_model".to_string()])
+    );
 }
 
 #[test]
 fn prints_all_models_when_select_is_omitted() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("[my_model]"))
-        .stdout(predicate::str::contains("[child_a]"))
-        .stdout(predicate::str::contains("[child_b]"))
-        .stdout(predicate::str::contains("[grandchild]"));
+    let assert = binary_cmd().current_dir(temp.path()).assert().success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from([
+            "child_a".to_string(),
+            "child_b".to_string(),
+            "grandchild".to_string(),
+            "my_model".to_string(),
+        ])
+    );
+    insta::assert_snapshot!("render_all_models_fixture", output);
 }
 
 #[test]
 fn prints_descendants_for_plus_suffix() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    let assert = binary_cmd()
+        .current_dir(temp.path())
         .args(["--select", "my_model+"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("[my_model]"))
-        .stdout(predicate::str::contains("[child_a]"))
-        .stdout(predicate::str::contains("[child_b]"))
-        .stdout(predicate::str::contains("[grandchild]"));
+        .success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from([
+            "child_a".to_string(),
+            "child_b".to_string(),
+            "grandchild".to_string(),
+            "my_model".to_string(),
+        ])
+    );
 }
 
 #[test]
 fn prints_ancestors_for_plus_prefix() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    let assert = binary_cmd()
+        .current_dir(temp.path())
         .args(["--select", "+grandchild"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("[grandchild]"))
-        .stdout(predicate::str::contains("[child_a]"))
-        .stdout(predicate::str::contains("[my_model]"));
+        .success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from([
+            "child_a".to_string(),
+            "grandchild".to_string(),
+            "my_model".to_string(),
+        ])
+    );
 }
 
 #[test]
 fn prints_both_sections_for_surrounded_plus() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    let assert = binary_cmd()
+        .current_dir(temp.path())
         .args(["--select", "+child_a+"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("[child_a]"))
-        .stdout(predicate::str::contains("[my_model]"))
-        .stdout(predicate::str::contains("[grandchild]"));
+        .success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from([
+            "child_a".to_string(),
+            "grandchild".to_string(),
+            "my_model".to_string(),
+        ])
+    );
 }
 
 #[test]
 fn state_flag_overrides_default_target() {
     let temp = setup_state_dir("custom_state");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    binary_cmd()
+        .current_dir(temp.path())
         .args(["--state", "custom_state", "--select", "my_model"])
         .assert()
         .success()
@@ -111,8 +168,8 @@ fn state_flag_overrides_default_target() {
 #[test]
 fn invalid_selector_exits_with_usage_code() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    binary_cmd()
+        .current_dir(temp.path())
         .args(["--select", "my_model++"])
         .assert()
         .code(2)
@@ -122,8 +179,8 @@ fn invalid_selector_exits_with_usage_code() {
 #[test]
 fn short_select_flag_is_supported() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    binary_cmd()
+        .current_dir(temp.path())
         .args(["-s", "my_model+"])
         .assert()
         .success()
@@ -134,41 +191,60 @@ fn short_select_flag_is_supported() {
 #[test]
 fn supports_union_with_space_separated_selectors() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    let assert = binary_cmd()
+        .current_dir(temp.path())
         .args(["-s", "my_model", "child_a+"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("[my_model]"))
-        .stdout(predicate::str::contains("[child_a]"))
-        .stdout(predicate::str::contains("[grandchild]"));
+        .success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from([
+            "child_a".to_string(),
+            "grandchild".to_string(),
+            "my_model".to_string(),
+        ])
+    );
 }
 
 #[test]
 fn supports_ancestor_depth_prefix() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    let assert = binary_cmd()
+        .current_dir(temp.path())
         .args(["-s", "1+grandchild"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("[grandchild]"))
-        .stdout(predicate::str::contains("[child_a]"))
-        .stdout(predicate::str::contains("[my_model]").not());
+        .success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from(["child_a".to_string(), "grandchild".to_string()])
+    );
 }
 
 #[test]
 fn supports_descendant_depth_suffix() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    let assert = binary_cmd()
+        .current_dir(temp.path())
         .args(["-s", "my_model+1"])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("[my_model]"))
-        .stdout(predicate::str::contains("[child_a]"))
-        .stdout(predicate::str::contains("[child_b]"))
-        .stdout(predicate::str::contains("[grandchild]").not());
+        .success();
+    let output =
+        String::from_utf8(assert.get_output().stdout.clone()).expect("stdout should be utf-8");
+
+    assert_eq!(
+        extracted_nodes(&output),
+        BTreeSet::from([
+            "child_a".to_string(),
+            "child_b".to_string(),
+            "my_model".to_string(),
+        ])
+    );
 }
 
 #[test]
@@ -176,8 +252,8 @@ fn missing_manifest_exits_with_runtime_code() {
     let temp = TempDir::new().expect("temp dir should be created");
     fs::create_dir_all(temp.path().join("target")).expect("target dir should be created");
 
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    binary_cmd()
+        .current_dir(temp.path())
         .args(["-s", "my_model"])
         .assert()
         .code(1)
@@ -187,8 +263,8 @@ fn missing_manifest_exits_with_runtime_code() {
 #[test]
 fn unknown_model_exits_with_runtime_code() {
     let temp = setup_state_dir("target");
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    binary_cmd()
+        .current_dir(temp.path())
         .args(["-s", "does_not_exist"])
         .assert()
         .code(1)
@@ -208,8 +284,8 @@ fn ambiguous_model_name_exits_with_runtime_code() {
             "child_map": {}
         }"#,
     );
-    let mut cmd = binary_cmd();
-    cmd.current_dir(temp.path())
+    binary_cmd()
+        .current_dir(temp.path())
         .args(["-s", "orders"])
         .assert()
         .code(1)

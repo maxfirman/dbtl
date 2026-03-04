@@ -5,6 +5,15 @@ on:
   pull_request:
 
 jobs:
+  readme-install-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify README install version matches latest tag
+        run: ./scripts/update_readme_install_version.sh --check
+
   core:
     runs-on: ubuntu-latest
     steps:

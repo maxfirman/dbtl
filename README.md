@@ -167,6 +167,23 @@ dbtl -s @orders
 - Disconnected components are rendered as separate blocks.
 - State-based selector methods are intentionally not implemented yet.
 
+### Proxy Support
+
+`dbtl self update` respects standard proxy environment variables:
+
+- `HTTP_PROXY` or `http_proxy` - HTTP proxy for HTTP connections
+- `HTTPS_PROXY` or `https_proxy` - HTTPS proxy for HTTPS connections
+- `ALL_PROXY` or `all_proxy` - proxy for both HTTP and HTTPS
+- `NO_PROXY` or `no_proxy` - comma-separated list of hosts to exclude from proxying
+
+Example:
+
+```bash
+export HTTPS_PROXY=http://proxy.company.com:8080
+export NO_PROXY=localhost,127.0.0.1
+dbtl self update
+```
+
 ## Exit Codes
 
 - `0`: success
